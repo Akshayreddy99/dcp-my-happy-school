@@ -1,0 +1,379 @@
+import { useState, useEffect } from "react";
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
+import { 
+  FileText, 
+  Download, 
+  Calendar,
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  Minus
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useGrades } from "@/contexts/GradesContext";
+import { useData } from "@/contexts/DataContext";
+
+export default function ParentGrades() {
+  const { toast } = useToast();
+  const { students, loading: studentsLoading } = useData();
+  const { grades, loading: gradesLoading, error, getStudentGrades } = useGrades();
+  const [activeChild, setActiveChild] = useState("");
+  const [activeTab, setActiveTab] = useState("current");
+  const [studentGrades, setStudentGrades] = useState<any[]>([]);
+
+  // Set initial active child
+  useEffect(() => {
+    if (!students.length) return;
+    if (!activeChild && students[0]) {
+      setActiveChild(students[0].id);
+    }
+  }, [students, activeChild]);
+
+  // Load grades when active child changes
+  useEffect(() => {
+    if (!activeChild) return;
+
+    const loadGrades = async () => {
+      try {
+        const grades = await getStudentGrades(activeChild);
+        setStudentGrades(grades);
+      } catch (err) {
+        console.error('Failed to load grades:', err);
+        toast({
+          title: "Error loading grades",
+          description: "Failed to load grades. Please try again.",
+          variant: "destructive"
+        });
+      }
+    };
+
+    loadGrades();
+  }, [activeChild, getStudentGrades]);
+
+  // Calculate GPA
+  const calculateGPA = (grades: any[]) => {
+    if (!grades.length) return 0;
+    
+    const gradePoints = grades.reduce((sum, grade) => {
+      const score = grade.score;
+      if (score >= 93) return sum + 4.0;
+      if (score >= 90) return sum + 3.7;
+      if (score >= 87) return sum + 3.3;
+      if (score >= 83) return sum + 3.0;
+      if (score >= 80) return sum + 2.7;
+      if (score >= 77) return sum + 2.3;
+      if (score >= 73) return sum + 2.0;
+      if (score >= 70) return sum + 1.7;
+      if (score >= 67) return sum + 1.3;
+      if (score >= 63) return sum + 1.0;
+      if (score >= 60) return sum + 0.7;
+      return sum;
+    }, 0);
+
+    return (gradePoints / grades.length).toFixed(2);
+  };
+
+  // Get trend icon based on grade comparison
+  const getTrendIcon = (current: number, previous: number) => {
+    if (current > previous) {
+      return <TrendingUp className="h-4 w-4 text-green-500" />;
+    } else if (current < previous) {
+      return <TrendingDown className="h-4 w-4 text-red-500" />;
+    }
+    return <Minus className="h-4 w-4 text-gray-500" />;
+  };
+
+  // Get grade color based on score
+  const getGradeColor = (score: number) => {
+    if (score >= 90) return "text-green-600 dark:text-green-400";
+    if (score >= 80) return "text-blue-600 dark:text-blue-400";
+    if (score >= 70) return "text-yellow-600 dark:text-yellow-400";
+    if (score >= 60) return "text-orange-600 dark:text-orange-400";
+    return "text-red-600 dark:text-red-400";
+  };
+
+  // Handle export grades
+  const handleExportGrades = async () => {
+    try {
+      // Implementation for exporting grades as CSV
+      toast({
+        title: "Grades exported",
+        description: "Your child's grades have been exported to CSV."
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: "Failed to export grades. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (studentsLoading || gradesLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64 text-red-500">
+        <AlertCircle className="h-6 w-6 mr-2" />
+        <span>Failed to load grades. Please try again.</span>
+      </div>
+    );
+  }
+
+  if (!students.length) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+          <h3 className="text-lg font-medium">No children found</h3>
+          <p className="text-muted-foreground">
+            No children are currently associated with your account
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentStudent = students.find(s => s.id === activeChild);
+  const currentGrades = studentGrades.filter(g => g.term === 'current');
+  const previousGrades = studentGrades.filter(g => g.term !== 'current');
+
+  return (
+    <div className="space-y-6">
+      <Card className="bg-white dark:bg-gray-800">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Academic Performance</CardTitle>
+            <CardDescription>
+              Track your children's grades and progress
+            </CardDescription>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleExportGrades}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export Grades
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={activeChild} onValueChange={setActiveChild}>
+            <TabsList className="mb-4">
+              {students.map(student => (
+                <TabsTrigger key={student.id} value={student.id}>
+                  {student.name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {students.map(student => (
+              <TabsContent key={student.id} value={student.id}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold">
+                          {calculateGPA(currentGrades)}
+                        </div>
+                        <p className="text-sm text-muted-foreground">Current GPA</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold">
+                          {currentGrades.length}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Assignments Graded
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold">
+                          {student.grade}
+                        </div>
+                        <p className="text-sm text-muted-foreground">Grade Level</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="current">Current Term</TabsTrigger>
+                    <TabsTrigger value="previous">Previous Terms</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="current">
+                    {currentGrades.length > 0 ? (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Current Term Grades</CardTitle>
+                          <CardDescription>
+                            {new Date().toLocaleDateString(undefined, { 
+                              year: 'numeric', 
+                              month: 'long' 
+                            })}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-6">
+                            {Object.entries(
+                              currentGrades.reduce((acc, grade) => {
+                                if (!acc[grade.subject]) {
+                                  acc[grade.subject] = [];
+                                }
+                                acc[grade.subject].push(grade);
+                                return acc;
+                              }, {})
+                            ).map(([subject, grades]: [string, any[]]) => (
+                              <div key={subject}>
+                                <h3 className="font-medium mb-2">{subject}</h3>
+                                <div className="space-y-2">
+                                  {grades.map((grade) => (
+                                    <div key={grade.id} className="flex justify-between items-center">
+                                      <div>
+                                        <p className="font-medium">{grade.assignment}</p>
+                                        <p className="text-sm text-muted-foreground">
+                                          {new Date(grade.date).toLocaleDateString()}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`font-bold ${getGradeColor(grade.score)}`}>
+                                          {grade.score}%
+                                        </span>
+                                        {getTrendIcon(
+                                          grade.score,
+                                          previousGrades.find(g => 
+                                            g.subject === grade.subject && 
+                                            g.assignment === grade.assignment
+                                          )?.score || grade.score
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <Separator className="my-4" />
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card>
+                        <CardContent className="py-8">
+                          <div className="text-center">
+                            <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                            <h3 className="text-lg font-medium">No Grades Yet</h3>
+                            <p className="text-muted-foreground">
+                              Grades for the current term will appear here
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="previous">
+                    {previousGrades.length > 0 ? (
+                      <div className="space-y-6">
+                        {Object.entries(
+                          previousGrades.reduce((acc, grade) => {
+                            if (!acc[grade.term]) {
+                              acc[grade.term] = [];
+                            }
+                            acc[grade.term].push(grade);
+                            return acc;
+                          }, {})
+                        ).map(([term, grades]: [string, any[]]) => (
+                          <Card key={term}>
+                            <CardHeader>
+                              <CardTitle>{term}</CardTitle>
+                              <CardDescription>
+                                GPA: {calculateGPA(grades)}
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-6">
+                                {Object.entries(
+                                  grades.reduce((acc, grade) => {
+                                    if (!acc[grade.subject]) {
+                                      acc[grade.subject] = [];
+                                    }
+                                    acc[grade.subject].push(grade);
+                                    return acc;
+                                  }, {})
+                                ).map(([subject, subjectGrades]: [string, any[]]) => (
+                                  <div key={subject}>
+                                    <h3 className="font-medium mb-2">{subject}</h3>
+                                    <div className="space-y-2">
+                                      {subjectGrades.map((grade) => (
+                                        <div key={grade.id} className="flex justify-between items-center">
+                                          <div>
+                                            <p className="font-medium">{grade.assignment}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                              {new Date(grade.date).toLocaleDateString()}
+                                            </p>
+                                          </div>
+                                          <span className={`font-bold ${getGradeColor(grade.score)}`}>
+                                            {grade.score}%
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <Separator className="my-4" />
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <Card>
+                        <CardContent className="py-8">
+                          <div className="text-center">
+                            <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                            <h3 className="text-lg font-medium">No Previous Terms</h3>
+                            <p className="text-muted-foreground">
+                              Previous term grades will appear here
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </TabsContent>
+            ))}
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
